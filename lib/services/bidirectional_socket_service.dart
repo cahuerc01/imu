@@ -33,7 +33,7 @@ class BidirectionalSocketService {
             final json = jsonDecode(line);
             if (onDataReceived != null) onDataReceived!(json);
           } catch (e) {
-            print("Error decoding: $e");
+            // print("Error decoding: $e");
           }
         }
       }
@@ -43,9 +43,9 @@ class BidirectionalSocketService {
   void sendData(Map<String, dynamic> data) {
     if (_activeSocket != null) {
       try {
-        _activeSocket!.write(jsonEncode(data) + '\n');
+        _activeSocket!.write('${jsonEncode(data)}\n');
       } catch (e) {
-        print("Error sending: $e");
+        // print("Error sending: $e");
       }
     }
   }

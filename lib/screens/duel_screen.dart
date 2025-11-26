@@ -10,7 +10,7 @@ import '../game_logic/saber_config.dart';
 
 class DuelScreen extends StatefulWidget {
   final String? peerIP;
-  const DuelScreen({Key? key, this.peerIP}) : super(key: key);
+  const DuelScreen({super.key, this.peerIP});
 
   @override
   State<DuelScreen> createState() => _DuelScreenState();
@@ -46,7 +46,7 @@ class _DuelScreenState extends State<DuelScreen> {
 
   void _setupConnection() {
     // Callback cuando recibimos datos del otro móvil
-    final onData = (Map<String, dynamic> data) {
+    void onData(Map<String, dynamic> data) {
       if (mounted) {
         setState(() {
           // Invertimos el ángulo del peer porque él nos mira de frente (espejo)
@@ -61,7 +61,7 @@ class _DuelScreenState extends State<DuelScreen> {
         });
         _checkCollision();
       }
-    };
+    }
 
     if (widget.peerIP == null) {
       _socketService.startServer(onData);
@@ -94,7 +94,9 @@ class _DuelScreenState extends State<DuelScreen> {
   void _startSensors() {
     // 1. Leer Magnetómetro para Orientación (Saber Dirección)
     // Usamos MagnetometerEvent para obtener el norte magnético (Azimuth absoluto)
-    _magnetometerSub = magnetometerEvents.listen((MagnetometerEvent event) {
+    _magnetometerSub = magnetometerEventStream().listen((
+      MagnetometerEvent event,
+    ) {
       // Cálculo básico de azimuth (brújula 2D)
       // atan2(y, x) da el ángulo respecto al norte
       double azimuth = atan2(event.y, event.x);
@@ -105,7 +107,7 @@ class _DuelScreenState extends State<DuelScreen> {
     });
 
     // 2. Leer Acelerómetro para Sonido de "Swing" (Movimiento)
-    _accelerometerSub = userAccelerometerEvents.listen((
+    _accelerometerSub = userAccelerometerEventStream().listen((
       UserAccelerometerEvent event,
     ) {
       if (!isSaberOn) return;
@@ -178,19 +180,19 @@ class _DuelScreenState extends State<DuelScreen> {
     vmath.Vector2 p2,
     vmath.Vector2 p3,
   ) {
-    double s1_x, s1_y, s2_x, s2_y;
-    s1_x = p1.x - p0.x;
-    s1_y = p1.y - p0.y;
-    s2_x = p3.x - p2.x;
-    s2_y = p3.y - p2.y;
+    double s1X, s1Y, s2X, s2Y;
+    s1X = p1.x - p0.x;
+    s1Y = p1.y - p0.y;
+    s2X = p3.x - p2.x;
+    s2Y = p3.y - p2.y;
 
     double s, t;
-    double denominator = (-s2_x * s1_y + s1_x * s2_y);
+    double denominator = (-s2X * s1Y + s1X * s2Y);
 
     if (denominator == 0) return false; // Paralelas
 
-    s = (-s1_y * (p0.x - p2.x) + s1_x * (p0.y - p2.y)) / denominator;
-    t = (s2_x * (p0.y - p2.y) - s2_y * (p0.x - p2.x)) / denominator;
+    s = (-s1Y * (p0.x - p2.x) + s1X * (p0.y - p2.y)) / denominator;
+    t = (s2X * (p0.y - p2.y) - s2Y * (p0.x - p2.x)) / denominator;
 
     // Colisión detectada si 0 <= s <= 1 y 0 <= t <= 1
     if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
@@ -203,11 +205,11 @@ class _DuelScreenState extends State<DuelScreen> {
     if (_isInCollisionWindow) return; // Evitar re-entradas múltiples
     _isInCollisionWindow = true;
 
-    print("¡CHOQUE DE SABLES!");
+    // print("¡CHOQUE DE SABLES!");
 
     // 1. Sonido y Vibración
     _audioManager.playClash();
-    if (await Vibration.hasVibrator() ?? false) {
+    if (await Vibration.hasVibrator()) {
       Vibration.vibrate(duration: 300);
     }
 
@@ -288,7 +290,7 @@ class _DuelScreenState extends State<DuelScreen> {
                   boxShadow: [
                     if (isSaberOn)
                       BoxShadow(
-                        color: Colors.red.withOpacity(0.6),
+                        color: Colors.red.withValues(alpha: 0.6),
                         blurRadius: 20,
                         spreadRadius: 5,
                       ),

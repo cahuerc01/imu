@@ -3,8 +3,6 @@ import 'package:audioplayers/audioplayers.dart';
 
 class AudioManager {
   final AudioPlayer _player = AudioPlayer();
-  final AudioPlayer _bgPlayer =
-      AudioPlayer(); // Por si quieres zumbido de fondo (idle)
   final Random _rng = Random();
 
   // Placeholders para archivos. Colócalos en assets/sounds/
@@ -31,8 +29,9 @@ class AudioManager {
   }
 
   Future<void> playSwing() async {
-    if (_player.state == PlayerState.playing)
+    if (_player.state == PlayerState.playing) {
       return; // No interrumpir si ya suena algo
+    }
     final file = swings[_rng.nextInt(swings.length)];
     await _player.play(AssetSource(file));
   }
