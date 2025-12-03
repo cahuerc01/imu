@@ -100,7 +100,9 @@ class _DuelScreenState extends State<DuelScreen> {
       // Cálculo básico de azimuth (brújula 2D)
       // atan2(y, x) da el ángulo respecto al norte
       double azimuth = atan2(event.y, event.x);
-      localAzimuth = azimuth;
+      setState(() {
+        localAzimuth = azimuth;
+      });
 
       // Si quisiéramos usar giroscopio puro sería más suave pero derivaría (drift).
       // Para este ejemplo, magnetómetro es más sencillo para "saber dónde apuntas".
