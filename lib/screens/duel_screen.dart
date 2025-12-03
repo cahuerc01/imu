@@ -24,10 +24,11 @@ class _DuelScreenState extends State<DuelScreen> {
   // Estado del Sable Local
   bool isSaberOn = false;
   double localAzimuth = 0.0; // Ángulo (Yaw) en radianes
+  double baseAzimuth = 0.0; // Ángulo de referencia al encender
 
   // Estado del Peer
   bool isPeerSaberOn = false;
-  double peerAzimuth = 0.0;
+  double peerDeltaAzimuth = 0.0; // Ángulo relativo del peer
 
   // Variables para LEDs y Colisión
   bool isLedOn = false; // Variable requerida para controlar LEDs externos
@@ -52,8 +53,9 @@ class _DuelScreenState extends State<DuelScreen> {
           // Invertimos el ángulo del peer porque él nos mira de frente (espejo)
           // Si no tenemos brújula absoluta, esto es una aproximación.
           // Asumimos que ambos "miran al norte" del juego al iniciar.
-          if (data.containsKey('azimuth')) {
-            peerAzimuth = (data['azimuth'] as num).toDouble();
+          // Asumimos que ambos "miran al norte" del juego al iniciar.
+          if (data.containsKey('deltaAzimuth')) {
+            peerDeltaAzimuth = (data['deltaAzimuth'] as num).toDouble();
           }
           if (data.containsKey('isSaberOn')) {
             isPeerSaberOn = data['isSaberOn'] as bool;
@@ -78,6 +80,8 @@ class _DuelScreenState extends State<DuelScreen> {
     });
 
     if (isSaberOn) {
+      // Calibrar: El ángulo actual es el "frente" (0 grados relativos)
+      baseAzimuth = localAzimuth;
       _audioManager.playOn();
       _startSensors();
     } else {
@@ -137,7 +141,9 @@ class _DuelScreenState extends State<DuelScreen> {
   }
 
   void _sendDataToPeer() {
-    _socketService.sendData({'azimuth': localAzimuth, 'isSaberOn': isSaberOn});
+    // Enviamos la diferencia respecto a nuestra base
+    double delta = localAzimuth - baseAzimuth;
+    _socketService.sendData({'deltaAzimuth': delta, 'isSaberOn': isSaberOn});
   }
 
   // --- LÓGICA CENTRAL: Detección de Colisión ---
@@ -149,24 +155,30 @@ class _DuelScreenState extends State<DuelScreen> {
     // Jugador Peer: Posición (0, Distance). Asumimos que está a 1.5m frente a mí.
 
     // Calculamos la punta de MI sable
-    // Vector desde (0,0) con longitud SaberLength y ángulo localAzimuth
+    // Vector desde (0,0) con longitud SaberLength.
+    // Ángulo relativo: localAzimuth - baseAzimuth + PI/2 (para que 0 sea hacia arriba +Y)
+    double myRelativeAngle = (localAzimuth - baseAzimuth) + (pi / 2);
     vmath.Vector2 myStart = vmath.Vector2(0, 0);
     vmath.Vector2 myEnd = vmath.Vector2(
-      SaberConfig.saberLength * cos(localAzimuth),
-      SaberConfig.saberLength * sin(localAzimuth),
+      SaberConfig.saberLength * cos(myRelativeAngle),
+      SaberConfig.saberLength * sin(myRelativeAngle),
     );
 
     // Calculamos la punta del sable del PEER
-    // IMPORTANTE: Su posición base es (0, Distance).
-    // Su ángulo viene en 'peerAzimuth'. Como él está enfrente, su sistema de coordenadas
-    // es relativo. Si ambos apuntamos al "Norte" geográfico, las líneas son paralelas.
+    // Posición base (0, Distance).
+    // Su ángulo relativo: peerDeltaAzimuth.
+    // PERO él está enfrente, rotado 180 grados (PI).
+    // Su "frente" apunta hacia -Y (270 grados o -PI/2).
+    // Entonces su ángulo efectivo es: peerDeltaAzimuth - PI/2.
+    double peerEffectiveAngle = peerDeltaAzimuth - (pi / 2);
+
     vmath.Vector2 peerStart = vmath.Vector2(
       0,
       SaberConfig.distanceBetweenPlayers,
     );
     vmath.Vector2 peerEnd = vmath.Vector2(
-      peerStart.x + SaberConfig.saberLength * cos(peerAzimuth),
-      peerStart.y + SaberConfig.saberLength * sin(peerAzimuth),
+      peerStart.x + SaberConfig.saberLength * cos(peerEffectiveAngle),
+      peerStart.y + SaberConfig.saberLength * sin(peerEffectiveAngle),
     );
 
     // Verificar Intersección de Segmentos
@@ -217,6 +229,21 @@ class _DuelScreenState extends State<DuelScreen> {
 
     // 2. Efecto de LEDs (Parpadeo True/False)
     _flashLeds();
+
+    // 3. Mensaje en Pantalla
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "¡COLISIÓN DETECTADA!",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
 
     // 3. Resetear ventana de colisión después del tiempo configurado
     Future.delayed(
@@ -269,8 +296,14 @@ class _DuelScreenState extends State<DuelScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Visualización DEBUG (Opcional, ayuda a entender)
-            Text("Mi Orientación: ${localAzimuth.toStringAsFixed(2)} rad"),
-            Text("Peer Orientación: ${peerAzimuth.toStringAsFixed(2)} rad"),
+            Text(
+              "Mi Orientación: ${localAzimuth.toStringAsFixed(2)} rad",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              "Peer Delta: ${peerDeltaAzimuth.toStringAsFixed(2)} rad",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 20),
             Text(
               isSaberOn ? "SABLE ENCENDIDO" : "SABLE APAGADO",
@@ -306,7 +339,10 @@ class _DuelScreenState extends State<DuelScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            Text(isLedOn ? "LED EXTERNO: ON" : "LED EXTERNO: OFF"),
+            Text(
+              isLedOn ? "LED EXTERNO: ON" : "LED EXTERNO: OFF",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             if (_isInCollisionWindow)
               const Text(
                 "¡IMPACTO!",
