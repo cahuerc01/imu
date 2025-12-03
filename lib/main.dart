@@ -13,10 +13,10 @@ void main() async {
   final AudioContext audioContext = AudioContext(
     iOS: AudioContextIOS(
       category: AVAudioSessionCategory.playback,
-      options: [
+      options: {
         AVAudioSessionOptions.defaultToSpeaker,
         AVAudioSessionOptions.mixWithOthers,
-      ],
+      },
     ),
     android: AudioContextAndroid(
       isSpeakerphoneOn: true,
