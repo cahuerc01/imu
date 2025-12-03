@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 // Importamos la nueva pantalla de duelo y quitamos la de chat
 import 'screens/duel_screen.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const MyApp());
@@ -38,7 +39,12 @@ class _HomeSelectorScreenState extends State<HomeSelectorScreen> {
   @override
   void initState() {
     super.initState();
+    _requestPermissions();
     _loadLocalIP();
+  }
+
+  void _requestPermissions() async {
+    await [Permission.location, Permission.nearbyWifiDevices].request();
   }
 
   void _loadLocalIP() async {
