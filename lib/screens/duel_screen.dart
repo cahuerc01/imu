@@ -30,6 +30,9 @@ class _DuelScreenState extends State<DuelScreen> {
   bool isPeerSaberOn = false;
   double peerDeltaAzimuth = 0.0; // Ángulo relativo del peer
 
+  // Variables para orientación adaptativa
+  double _lastAccelY = 0.0;
+
   // Variables para LEDs y Colisión
   bool isLedOn = false; // Variable requerida para controlar LEDs externos
   bool _isInCollisionWindow = false;
@@ -97,33 +100,60 @@ class _DuelScreenState extends State<DuelScreen> {
 
   void _startSensors() {
     // 1. Leer Magnetómetro para Orientación (Saber Dirección)
-    // Usamos MagnetometerEvent para obtener el norte magnético (Azimuth absoluto)
     _magnetometerSub = magnetometerEventStream().listen((
       MagnetometerEvent event,
     ) {
-      // Cálculo básico de azimuth (brújula 2D)
-      // atan2(y, x) da el ángulo respecto al norte
-      double azimuth = atan2(event.y, event.x);
+      double azimuth;
+      // Orientación Adaptativa:
+      // Si el móvil está vertical (Y > 5.0 aprox, gravedad es 9.8), usamos Z y X.
+      // Si está plano (Z > 5.0), usamos Y y X.
+      bool isVertical = _lastAccelY.abs() > 5.0;
+
+      if (isVertical) {
+        // Modo "Espada" (Vertical)
+        azimuth = atan2(event.z, event.x);
+      } else {
+        // Modo "Mesa" (Plano)
+        azimuth = atan2(event.y, event.x);
+      }
+
       setState(() {
         localAzimuth = azimuth;
       });
-
-      // Si quisiéramos usar giroscopio puro sería más suave pero derivaría (drift).
-      // Para este ejemplo, magnetómetro es más sencillo para "saber dónde apuntas".
     });
 
-    // 2. Leer Acelerómetro para Sonido de "Swing" (Movimiento)
+    // 2. Leer Acelerómetro para Sonido de "Swing" y Orientación Adaptativa
     _accelerometerSub = userAccelerometerEventStream().listen((
       UserAccelerometerEvent event,
     ) {
+      // Guardamos para uso en magnetómetro (aunque userAccelerometer quita gravedad,
+      // para detectar postura idealmente usaríamos accelerometerEventStream normal.
+      // Pero para simplificar, usaremos userAccelerometer asumiendo movimientos o
+      // mejor aún, cambiamos a accelerometerEventStream para la gravedad).
+    });
+    // CORRECCIÓN: Necesitamos la gravedad para saber la postura.
+    // Usamos accelerometerEventStream en lugar de userAccelerometerEventStream para esto?
+    // No, userAccelerometer es mejor para swings.
+    // Vamos a suscribirnos TAMBIÉN al acelerómetro normal para la gravedad.
+    // O simplemente asumimos que userAccelerometer ~ 0 es quieto, pero no nos da la gravedad.
+    // Haremos un truco: usaremos el sensor de gravedad si está disponible o accelerometer normal.
+    // Por simplicidad, cambiamos userAccelerometer a accelerometer normal para TODO.
+    _accelerometerSub = accelerometerEventStream().listen((
+      AccelerometerEvent event,
+    ) {
+      _lastAccelY = event.y;
+
       if (!isSaberOn) return;
 
-      // Calcular magnitud del movimiento
+      // Calcular magnitud del movimiento (quitando gravedad aprox con filtro paso alto sería ideal,
+      // pero magnitud bruta > 15 suele ser un swing fuerte si gravedad es 9.8)
       double magnitude = sqrt(
         event.x * event.x + event.y * event.y + event.z * event.z,
       );
 
-      if (magnitude > SaberConfig.swingThreshold) {
+      // Umbral ajustado para acelerómetro con gravedad (9.8 base)
+      // Swing fuerte será > 13.0 o < 6.0
+      if ((magnitude - 9.8).abs() > SaberConfig.swingThreshold) {
         _audioManager.playSwing();
       }
     });
@@ -182,7 +212,14 @@ class _DuelScreenState extends State<DuelScreen> {
     );
 
     // Verificar Intersección de Segmentos
-    if (_doLinesIntersect(myStart, myEnd, peerStart, peerEnd)) {
+    bool intersection = _doLinesIntersect(myStart, myEnd, peerStart, peerEnd);
+
+    // Verificar Proximidad de Puntas (Tip Proximity)
+    // Si las puntas están cerca (< 30cm), cuenta como choque (bloqueo/estocada)
+    double tipDistance = myEnd.distanceTo(peerEnd);
+    bool tipsClose = tipDistance < 0.3; // 30 cm
+
+    if (intersection || tipsClose) {
       _triggerCollisionEffect();
     }
   }
@@ -298,11 +335,19 @@ class _DuelScreenState extends State<DuelScreen> {
             // Visualización DEBUG (Opcional, ayuda a entender)
             Text(
               "Mi Orientación: ${localAzimuth.toStringAsFixed(2)} rad",
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 24,
+                color: Colors.black87,
+              ),
             ),
             Text(
               "Peer Delta: ${peerDeltaAzimuth.toStringAsFixed(2)} rad",
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 24,
+                color: Colors.black54,
+              ),
             ),
             const SizedBox(height: 20),
             Text(
@@ -341,7 +386,11 @@ class _DuelScreenState extends State<DuelScreen> {
             const SizedBox(height: 20),
             Text(
               isLedOn ? "LED EXTERNO: ON" : "LED EXTERNO: OFF",
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 30,
+                color: Colors.black,
+              ),
             ),
             if (_isInCollisionWindow)
               const Text(
