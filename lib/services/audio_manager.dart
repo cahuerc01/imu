@@ -7,10 +7,13 @@ class AudioManager {
 
   // Placeholders para archivos. Colócalos en assets/sounds/
   // Asegúrate de declararlos en el pubspec.yaml bajo assets
-  final String sndOn = 'saber_on.mp3';
-  final String sndOff = 'saber_off.mp3';
-  final String sndClash = 'clash.mp3';
-  final List<String> swings = ['swing1.mp3', 'swing2.mp3', 'swing3.mp3'];
+  final String sndOn = 'sounds/encendido_laser.mp3';
+  final String sndOff = 'sounds/apagado_laser.mp3';
+  final String sndClash = 'sounds/choque1.mp3';
+  final List<String> swings = [
+    'sounds/movimiento_laser1.mp3',
+    'sounds/movimiento_laser2.mp3',
+  ];
 
   Future<void> playOn() async {
     try {

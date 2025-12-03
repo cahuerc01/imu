@@ -4,7 +4,30 @@ import 'package:network_info_plus/network_info_plus.dart';
 import 'screens/duel_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-void main() {
+import 'package:audioplayers/audioplayers.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Configuración de Audio Global para asegurar que suene en silencio y por altavoz
+  final AudioContext audioContext = AudioContext(
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.playback,
+      options: [
+        AVAudioSessionOptions.defaultToSpeaker,
+        AVAudioSessionOptions.mixWithOthers,
+      ],
+    ),
+    android: AudioContextAndroid(
+      isSpeakerphoneOn: true,
+      stayAwake: true,
+      contentType: AndroidContentType.sonification,
+      usageType: AndroidUsageType.game,
+      audioFocus: AndroidAudioFocus.none,
+    ),
+  );
+  await AudioPlayer.global.setAudioContext(audioContext);
+
   runApp(const MyApp());
 }
 
